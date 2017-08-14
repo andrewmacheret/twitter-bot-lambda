@@ -1,0 +1,75 @@
+const fs = require('fs')
+
+const Test = require('./Test')
+const index = require('./bot')
+
+var twitter = JSON.parse(fs.readFileSync('./twitter.json', 'utf8'));
+
+Test.runAll([
+  {
+    fn: index.tweetEvent,
+    tests: [
+      /*
+      new Test({
+        args: [
+          {
+            twitter,
+            text: 'this is a test'
+          },
+          {}
+        ],
+        expected: /^\{.*\}$/,
+        error: false
+      }),
+      */
+      new Test({
+        args: [
+          {
+            twitter,
+            request: {
+              uri: 'https://pun.andrewmacheret.com',
+              headers: { 'Accept': 'text/plain' }
+            }
+          },
+          {}
+        ],
+        expected: /^\{.*\}$/,
+        error: false
+      }),
+      new Test({
+        args: [
+          {
+            twitter
+          },
+          {}
+        ],
+        expected: /^Could not handle the event, expected property "text" or "request"$/,
+        error: true
+      }),
+      new Test({
+        args: [
+          {
+            text: 'this is a test'
+          },
+          {}
+        ],
+        expected: /^Could not handle the event, required property "twitter" is missing$/,
+        error: true
+      }),
+      new Test({
+        args: [
+          {
+            twitter,
+            text: {'this will fail': 'bla'}
+          },
+          {}
+        ],
+        expected: /^"text" is not a string$/,
+        error: true
+      })
+    ]
+  }
+])
+
+
+

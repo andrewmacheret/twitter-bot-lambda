@@ -1,0 +1,56 @@
+const Twitter = require('lwt')
+const request = require('request')
+//const {promisify, callbackify} = require('util')
+const promisify = require('es6-promisify')
+const callbackify = require('callbackify')
+
+const tweet = async (twitterSettings, tweetText) => {
+  // the following twitter settings are required:
+  // {
+  //   "accessToken": "...",
+  //   "accessSecret": "...",
+  //   "consumerKey": "...",
+  //   "consumerSecret": "..."
+  // }
+  const twitter = new Twitter(twitterSettings)
+
+  // promisify twitter.post
+  const postTwitterStatus = promisify(twitter.post.bind(twitter))
+
+  // post tweetText on twitter
+  const result = await postTwitterStatus('statuses/update', { status: tweetText })
+  console.log('tweet result', result)
+  if (result.errors && result.errors.length > 0 && result.errors[0].message) {
+    throw result.errors[0].message
+  }
+  return result
+}
+
+const tweetEvent = async (event, context) => {
+  if (!event.twitter) {
+    throw 'Could not handle the event, required property "twitter" is missing'
+  }
+
+  // obtain the text to post
+  let text
+  if (event.text) {
+    text = event.text
+  } else if (event.request) {
+    text = (await promisify(request)(event.request)).body
+  } else {
+    throw 'Could not handle the event, expected property "text" or "request"'
+  }
+
+  // ensure the text is actually a string
+  console.log('text:', text)
+  if (typeof text !== 'string') {
+    throw '"text" is not a string'
+  }
+  
+  // tweet the text
+  return await tweet(event.twitter, text)
+}
+
+// export both versions of the tweetEvent method
+exports.tweetEvent = tweetEvent
+exports.tweetEventCallback = callbackify(tweetEvent)

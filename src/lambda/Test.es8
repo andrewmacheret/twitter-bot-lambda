@@ -1,0 +1,129 @@
+const sys = require('process')
+
+class Test {
+  constructor(options) {
+    this._args = options.args
+    this._expected = options.expected
+    this._error = options.error
+
+    Test.incTestCount()
+    this._test_number = Test.testCount
+  }
+
+  async run(fn) {
+    console.log(`TEST #${this._test_number}/${Test.testCount} STARTED`)
+
+    let error, actual
+    try {
+      actual = await fn(...this._args)
+    } catch(err) {
+      error = err
+    }
+    if (this._error) {
+      [ error, actual ] = [ actual, error ]
+    }
+
+    let testMessage
+    if (error) {
+      testMessage = 'ERROR: ' + error
+    } else if (!this.test(this._expected, actual)) {
+      testMessage = 'FAILURE: ' + this.failureMessage(this._expected, actual)
+    } else {
+      testMessage = 'PASS'
+      Test.incSuccessCount()
+    }
+
+    console.log(`TEST #${this._test_number}/${Test.testCount} FINISHED - ${testMessage}`)
+  }
+
+  static async runAllParallel(allTests) {
+    const promises = []
+    for (const fnTests of allTests) {
+      for (const test of fnTests.tests) {
+        promises.push(test.run(fnTests.fn))
+      }
+    }
+    await Promise.all(promises)
+
+    console.log(`${Test.successCount} of ${Test.testCount} tests passed`)
+    process.exit(Test.successCount !== Test.testCount ? 1 : 0)
+  }
+
+  static async runAll(allTests) {
+    for (const fnTests of allTests) {
+      for (const test of fnTests.tests) {
+        await test.run(fnTests.fn)
+      }
+    }
+
+    console.log(`${Test.successCount} of ${Test.testCount} tests passed`)
+    process.exit(Test.successCount !== Test.testCount ? 1 : 0)
+  }
+
+  test(expected, actual) {
+    if (expected instanceof RegExp) {
+      return expected.test((typeof actual === 'string') ? actual : JSON.stringify(actual))
+    } else if (Array.isArray(expected)) {
+      return this.testArray(expected, actual)
+    } else if (typeof expected === 'string' || typeof expected === 'number' || typeof expected === 'boolean' || typeof expected === 'function' || typeof expected === 'symbol' || typeof expected === 'undefined') {
+      return expected === actual
+    } else if (typeof expected === 'object') {
+      return this.testObject(expected, actual)
+    } else {
+      throw `Unaccounted typeof value: '${typeof expected}'`
+    }
+  }
+
+  testArray(expected, actual) {
+    if (!Array.isArray(actual) || expected.length !== actual.length) {
+      return false
+    }
+    for (let i = 0; i < expected.length; i++) {
+      if (!test(expected[i], actual[i])) {
+        return false
+      }
+    }
+    return true
+  }
+
+  testObject(expected, actual) {
+    if (typeof actual !== 'object') {
+      return false
+    }
+    const expectedKeys = Object.keys(expected)
+    const actualKeys = Object.keys(actual)
+    if (expectedKeys.length !== actualKeys.length) {
+      return false
+    }
+    expectedKeys.sort()
+    actualKeys.sort()
+    for (let i = 0; i < expected.length; i++) {
+      if (expectedKeys[i] !== actualKeys[i] || !test(expected[expectedKeys[i]], actual[actualKeys[i]])) {
+        return false
+      }
+    }
+    return true
+  }
+
+  failureMessage(expected, actual) {
+    return `
+  expected: ${expected instanceof RegExp ? expected : JSON.stringify(expected)}
+  !==
+  actual:   ${JSON.stringify(actual)}
+`
+  }
+
+  static incTestCount() {
+    Test._testCount = Test.testCount + 1
+  }
+
+  static incSuccessCount() {
+    Test._successCount = Test.successCount + 1
+  }
+
+  static get testCount() { return Test._testCount || 0 }
+
+  static get successCount() { return Test._successCount || 0 }
+}
+
+module.exports = Test
